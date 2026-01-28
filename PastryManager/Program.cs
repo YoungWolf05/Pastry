@@ -2,6 +2,7 @@ using PastryManager.Application;
 using PastryManager.Infrastructure;
 using PastryManager.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +16,24 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "PastryManager API", Version = "v1" });
 });
+
+// Add health checks for AWS
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "live" })
+    .AddCheck("database", () =>
+    {
+        try
+        {
+            using var scope = builder.Services.BuildServiceProvider().CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            dbContext.Database.CanConnect();
+            return HealthCheckResult.Healthy();
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy("Database check failed", ex);
+        }
+    }, tags: new[] { "ready" });
 
 // Add CORS
 builder.Services.AddCors(options =>
@@ -63,6 +82,23 @@ if (app.Environment.IsDevelopment())
         }
     }
 }
+else
+{
+    // In production, enable Swagger
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+// Health check endpoints for AWS ECS/ELB
+app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("live")
+});
 
 app.UseHttpsRedirection();
 app.UseCors("AllowAll");
