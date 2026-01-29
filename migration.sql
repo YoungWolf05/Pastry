@@ -71,3 +71,12 @@ VALUES ('20260128074914_InitialCreate', '8.0.20');
 
 COMMIT;
 
+START TRANSACTION;
+
+ALTER TABLE "Users" ADD "PhoneNumber" character varying(20);
+
+INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+VALUES ('20260129031146_AddPhoneNumberToUser', '8.0.20');
+
+COMMIT;
+

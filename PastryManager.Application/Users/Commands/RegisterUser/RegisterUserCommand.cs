@@ -8,5 +8,6 @@ public record RegisterUserCommand(
     string Email,
     string FirstName,
     string LastName,
+    string? PhoneNumber,
     string Password
 ) : IRequest<Result<UserDto>>;

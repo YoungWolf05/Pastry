@@ -31,6 +31,7 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, R
             Email = request.Email.ToLowerInvariant(),
             FirstName = request.FirstName,
             LastName = request.LastName,
+            PhoneNumber = request.PhoneNumber,
             PasswordHash = _passwordHasher.HashPassword(request.Password),
             Role = UserRole.User,
             IsActive = true
@@ -44,6 +45,7 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, R
             createdUser.Email,
             createdUser.FirstName,
             createdUser.LastName,
+            createdUser.PhoneNumber,
             createdUser.Role,
             createdUser.IsActive,
             createdUser.CreatedAt,

@@ -29,6 +29,7 @@ public class UsersController : ControllerBase
             dto.Email,
             dto.FirstName,
             dto.LastName,
+            dto.PhoneNumber,
             dto.Password
         );
 

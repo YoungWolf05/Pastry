@@ -1,6 +1,7 @@
 using PastryManager.Application;
 using PastryManager.Infrastructure;
 using PastryManager.Infrastructure.Data;
+using PastryManager.Api.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -20,20 +21,7 @@ builder.Services.AddSwaggerGen(c =>
 // Add health checks for AWS
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "live" })
-    .AddCheck("database", () =>
-    {
-        try
-        {
-            using var scope = builder.Services.BuildServiceProvider().CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            dbContext.Database.CanConnect();
-            return HealthCheckResult.Healthy();
-        }
-        catch (Exception ex)
-        {
-            return HealthCheckResult.Unhealthy("Database check failed", ex);
-        }
-    }, tags: new[] { "ready" });
+    .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "ready" });
 
 // Add CORS
 builder.Services.AddCors(options =>

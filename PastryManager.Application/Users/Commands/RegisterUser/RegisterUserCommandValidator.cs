@@ -19,6 +19,12 @@ public class RegisterUserCommandValidator : AbstractValidator<RegisterUserComman
             .NotEmpty().WithMessage("Last name is required")
             .MaximumLength(100).WithMessage("Last name must not exceed 100 characters");
 
+        RuleFor(x => x.PhoneNumber)
+            .MaximumLength(20).WithMessage("Phone number must not exceed 20 characters")
+            .Matches(@"^[+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$")
+            .WithMessage("Invalid phone number format")
+            .When(x => !string.IsNullOrEmpty(x.PhoneNumber));
+
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required")
             .MinimumLength(8).WithMessage("Password must be at least 8 characters")
