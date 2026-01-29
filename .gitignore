@@ -29,6 +29,7 @@ packages/
 
 # Logs
 *.log
+logs/
 
 # Temporary files
 *.tmp

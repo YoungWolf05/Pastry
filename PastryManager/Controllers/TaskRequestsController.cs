@@ -41,7 +41,7 @@ public class TaskRequestsController : ControllerBase
 
         if (!result.IsSuccess)
         {
-            return BadRequest(new { error = result.Error, errors = result.Errors });
+            return BadRequest(new { errors = result.Errors });
         }
 
         return CreatedAtAction(nameof(GetByAssignedUser), new { userId = dto.AssignedToUserId }, result.Data);
@@ -59,7 +59,7 @@ public class TaskRequestsController : ControllerBase
 
         if (!result.IsSuccess)
         {
-            return BadRequest(new { error = result.Error });
+            return BadRequest(new { errors = result.Errors });
         }
 
         return Ok(result.Data);
@@ -78,7 +78,7 @@ public class TaskRequestsController : ControllerBase
 
         if (!result.IsSuccess)
         {
-            return NotFound(new { error = result.Error });
+            return NotFound(new { errors = result.Errors });
         }
 
         return Ok(result.Data);
