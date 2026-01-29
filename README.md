@@ -51,6 +51,35 @@ dotnet run --project AppHost/PastryManager.AppHost.csproj
 - Aspire Dashboard: Check terminal output for URL (e.g., `https://localhost:17065`)
 - API Swagger: Available through Aspire dashboard links
 
+## 🔧 Database Migrations
+
+**Install EF Core Tools (one-time):**
+```bash
+dotnet tool install --global dotnet-ef
+```
+
+**Generate Migration:**
+```bash
+dotnet ef migrations add MigrationName --project PastryManager.Infrastructure --startup-project PastryManager
+```
+
+**Apply Migration Manually (optional - auto-applies on startup in development):**
+```bash
+dotnet ef database update --project PastryManager.Infrastructure --startup-project PastryManager
+```
+
+**Generate SQL Script (for production deployments):**
+```bash
+dotnet ef migrations script --project PastryManager.Infrastructure --startup-project PastryManager --output migration.sql
+```
+
+**Remove Last Migration (if not applied):**
+```bash
+dotnet ef migrations remove --project PastryManager.Infrastructure --startup-project PastryManager
+```
+
+> **Note:** Migrations auto-apply on startup in development. For production, consider using manual migrations or SQL scripts.
+
 ## 📋 API Endpoints
 
 **Users:**
