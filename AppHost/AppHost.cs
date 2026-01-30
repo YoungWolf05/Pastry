@@ -1,10 +1,11 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Add PostgreSQL database
+// Add PostgreSQL database with fixed port
 var postgres = builder.AddPostgres("postgres")
     .WithImageTag("18")
     .WithDataVolume()
-    .WithPgAdmin();
+    .WithPgAdmin()
+    .WithHostPort(5433);
 
 var pastryDb = postgres.AddDatabase("pastrydb");
 

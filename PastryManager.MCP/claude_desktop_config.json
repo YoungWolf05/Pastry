@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "pastry-manager": {
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "C:\\Users\\SNGCF\\source\\repos\\Pastry\\PastryManager.MCP\\PastryManager.MCP.csproj"
+      ],
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
