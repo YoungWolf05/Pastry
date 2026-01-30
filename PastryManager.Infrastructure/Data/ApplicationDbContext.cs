@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using PastryManager.Application.Common.Interfaces;
 using PastryManager.Domain.Entities;
 using System.Reflection;
 
 namespace PastryManager.Infrastructure.Data;
 
-public class ApplicationDbContext : DbContext
+public class ApplicationDbContext : DbContext, IApplicationDbContext
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -14,6 +15,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<TaskRequest> TaskRequests => Set<TaskRequest>();
     public DbSet<TaskComment> TaskComments => Set<TaskComment>();
+    public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
