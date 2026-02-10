@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PastryManager.Domain", "..\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PastryManager.Infrastructure", "..\PastryManager.Infrastructure\PastryManager.Infrastructure.csproj", "{D4840C68-AB89-CB5E-981A-226542EA9399}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PastryManager.MCP", "..\PastryManager.MCP\PastryManager.MCP.csproj", "{330C73DE-7D4F-520C-4229-65C774AA3068}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{D4840C68-AB89-CB5E-981A-226542EA9399}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D4840C68-AB89-CB5E-981A-226542EA9399}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D4840C68-AB89-CB5E-981A-226542EA9399}.Release|Any CPU.Build.0 = Release|Any CPU
+		{330C73DE-7D4F-520C-4229-65C774AA3068}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{330C73DE-7D4F-520C-4229-65C774AA3068}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{330C73DE-7D4F-520C-4229-65C774AA3068}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{330C73DE-7D4F-520C-4229-65C774AA3068}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
