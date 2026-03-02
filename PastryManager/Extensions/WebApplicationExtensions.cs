@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using PastryManager.Middleware.Security;
 using Serilog;
 
 namespace PastryManager.Api.Extensions;
@@ -7,12 +8,20 @@ public static class WebApplicationExtensions
 {
     public static WebApplication ConfigurePipeline(this WebApplication app)
     {
+        // Security middleware - must be first
+        app.UseMiddleware<SecurityHeadersMiddleware>();
+        app.UseMiddleware<RateLimitingMiddleware>();
+        app.UseMiddleware<InputValidationMiddleware>();
+        
         // Exception handler
         app.UseExceptionHandler();
 
-        // Swagger
-        app.UseSwagger();
-        app.UseSwaggerUI();
+        // Swagger (development only recommended for production)
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI();
+        }
 
         // Health check endpoints
         app.MapHealthChecks("/health");
@@ -25,9 +34,14 @@ public static class WebApplicationExtensions
             Predicate = check => check.Tags.Contains("live")
         });
 
-        // Standard middleware
+        // Force HTTPS
         app.UseHttpsRedirection();
-        app.UseCors("AllowAll");
+        
+        // HSTS (HTTP Strict Transport Security)
+        app.UseHsts();
+        
+        // CORS with secure policy
+        app.UseCors("SecurePolicy");
 
         // Serilog request logging
         app.UseSerilogRequestLogging(options =>
@@ -37,6 +51,7 @@ public static class WebApplicationExtensions
             {
                 diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
                 diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString());
+                diagnosticContext.Set("RemoteIP", httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
             };
             options.GetLevel = (httpContext, elapsed, ex) =>
             {
@@ -49,7 +64,13 @@ public static class WebApplicationExtensions
             };
         });
 
+        // Authentication & Authorization - Order matters!
+        app.UseAuthentication();
         app.UseAuthorization();
+        
+        // Audit logging middleware
+        app.UseMiddleware<AuditLoggingMiddleware>();
+        
         app.MapControllers();
 
         return app;

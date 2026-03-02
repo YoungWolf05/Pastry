@@ -16,6 +16,17 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<TaskRequest> TaskRequests => Set<TaskRequest>();
     public DbSet<TaskComment> TaskComments => Set<TaskComment>();
     public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();
+    
+    // Banking entities
+    public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<Transaction> Transactions => Set<Transaction>();
+    
+    // Event sourcing and audit
+    public DbSet<EventStore> EventStores => Set<EventStore>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    
+    // Authentication
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,5 +1,7 @@
 using Amazon.S3;
 using Amazon.Runtime;
+using Amazon.KeyManagementService;
+using Amazon.SecretsManager;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,6 +10,13 @@ using PastryManager.Application.Common.Interfaces;
 using PastryManager.Infrastructure.Data;
 using PastryManager.Infrastructure.Repositories;
 using PastryManager.Infrastructure.Services;
+using PastryManager.Infrastructure.Services.Kafka;
+using PastryManager.Infrastructure.Services.Encryption;
+using PastryManager.Infrastructure.Services.Authentication;
+using PastryManager.Infrastructure.Services.Audit;
+using PastryManager.Infrastructure.Services.EventSourcing;
+using PastryManager.Infrastructure.Services.Secrets;
+using PastryManager.Infrastructure.Services.Saga;
 
 namespace PastryManager.Infrastructure;
 
@@ -35,10 +44,52 @@ public static class DependencyInjection
         // Register infrastructure services
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         
-        // Configure AWS S3
+        // Configure Kafka
+        ConfigureKafka(services, configuration);
+        
+        // Configure AWS Services (S3, KMS, Secrets Manager)
         ConfigureAwsServices(services, configuration);
+        
+        // Configure encryption services
+        services.Configure<EncryptionSettings>(options => configuration.GetSection("Encryption").Bind(options));
+        services.AddScoped<IEncryptionService, KmsEncryptionService>();
+        
+        // Configure authentication services
+        services.Configure<JwtSettings>(options => configuration.GetSection("Jwt").Bind(options));
+        services.AddScoped<ITokenService, TokenService>();
+        
+        // Configure audit service
+        services.AddScoped<IAuditService, AuditService>();
+        
+        // Configure event sourcing
+        services.AddScoped<IEventStoreService, EventStoreService>();
+        
+        // Configure secrets management
+        services.AddScoped<ISecretsManagerService, SecretsManagerService>();
+        
+        // Configure Saga orchestrator
+        services.AddScoped<ISagaOrchestrator, TransferSagaOrchestrator>();
 
         return services;
+    }
+    
+    private static void ConfigureKafka(IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<KafkaSettings>(options =>
+        {
+            configuration.GetSection("Kafka").Bind(options);
+            
+            // Aspire injects Kafka connection with the resource name "kafka"
+            var aspireKafkaConnection = configuration.GetConnectionString("kafka");
+            if (!string.IsNullOrEmpty(aspireKafkaConnection))
+            {
+                // Aspire provides the bootstrap servers directly
+                options.BootstrapServers = aspireKafkaConnection;
+            }
+        });
+        
+        services.AddSingleton<IKafkaProducer, KafkaProducer>();
+        services.AddSingleton<IKafkaConsumer, KafkaConsumer>();
     }
 
     private static void ConfigureAwsServices(IServiceCollection services, IConfiguration configuration)
@@ -63,6 +114,12 @@ public static class DependencyInjection
         
         // Configure S3 client with ForcePathStyle for LocalStack
         services.AddAWSService<IAmazonS3>(awsOptions);
+        
+        // Configure KMS client
+        services.AddAWSService<IAmazonKeyManagementService>(awsOptions);
+        
+        // Configure Secrets Manager client
+        services.AddAWSService<IAmazonSecretsManager>(awsOptions);
         
         if (forcePathStyle)
         {

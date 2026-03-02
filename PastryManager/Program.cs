@@ -18,7 +18,7 @@ try
     // Add services
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
-    builder.Services.AddApiServices();
+    builder.Services.AddApiServices(builder.Configuration);
 
     var app = builder.Build();
 
