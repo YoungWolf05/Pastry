@@ -63,6 +63,10 @@ public class EventStoreService : IEventStoreService
             "Event {EventType} appended to event store for aggregate {AggregateId}",
             domainEvent.EventType,
             eventStoreEntry.AggregateId);
+
+        // Auto-publish to the correct Kafka topic based on event type
+        var topic = ResolveKafkaTopic(domainEvent);
+        await PublishEventToKafkaAsync(domainEvent, topic, cancellationToken);
     }
 
     public async Task<IEnumerable<EventStore>> GetEventsForAggregateAsync(
@@ -92,9 +96,19 @@ public class EventStoreService : IEventStoreService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to publish event {EventType} to Kafka", domainEvent.EventType);
-            throw;
+            // Don't rethrow - Kafka being down should not fail the business operation
         }
     }
+
+    /// <summary>
+    /// Routes events to the correct Kafka topic based on their type
+    /// </summary>
+    private static string ResolveKafkaTopic(IDomainEvent domainEvent) => domainEvent switch
+    {
+        AccountEvent   => KafkaTopics.AccountEvents,
+        TransactionEvent => KafkaTopics.TransactionEvents,
+        _              => KafkaTopics.AuditLogs
+    };
 
     private static string ComputeHash(string data)
     {

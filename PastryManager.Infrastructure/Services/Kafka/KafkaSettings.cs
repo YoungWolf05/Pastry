@@ -25,9 +25,10 @@ public class KafkaSettings
     public int RequestTimeoutMs { get; set; } = 30000;
     public bool EnableIdempotence { get; set; } = true;
     
-    // Topic Settings
-    public required string AccountEventsTopic { get; set; }
-    public required string TransactionEventsTopic { get; set; }
-    public required string AuditLogTopic { get; set; }
-    public required string DeadLetterTopic { get; set; }
+    // Topic Settings - default to well-known names defined in KafkaTopics
+    public string AccountEventsTopic    { get; set; } = KafkaTopics.AccountEvents;
+    public string TransactionEventsTopic{ get; set; } = KafkaTopics.TransactionEvents;
+    public string AuditLogTopic         { get; set; } = KafkaTopics.AuditLogs;
+    public string DeadLetterTopic       { get; set; } = KafkaTopics.DeadLetterQueue;
+    public string TransferSagaTopic     { get; set; } = KafkaTopics.TransferSagaEvents;
 }

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PastryManager.Domain.Entities;
 using PastryManager.Domain.Enums;
 using PastryManager.Infrastructure.Data;
+using PastryManager.Infrastructure.Services.Kafka;
 using PastryManager.Infrastructure.Services.Saga;
 
 namespace PastryManager.Api.Controllers;
@@ -13,15 +14,18 @@ public class TransactionsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly ISagaOrchestrator _sagaOrchestrator;
+    private readonly IKafkaProducer _kafkaProducer;
     private readonly ILogger<TransactionsController> _logger;
 
     public TransactionsController(
         ApplicationDbContext context,
         ISagaOrchestrator sagaOrchestrator,
+        IKafkaProducer kafkaProducer,
         ILogger<TransactionsController> logger)
     {
         _context = context;
         _sagaOrchestrator = sagaOrchestrator;
+        _kafkaProducer = kafkaProducer;
         _logger = logger;
     }
 
@@ -231,6 +235,52 @@ public class TransactionsController : ControllerBase
             _logger.LogError(ex, "Deposit failed for account {AccountId}", request.AccountId);
             return StatusCode(500, new { error = "Deposit failed", details = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// [TEST ONLY] Simulate a failed event to populate the dead-letter-queue topic.
+    /// </summary>
+    [HttpPost("test/simulate-dlq")]
+    public async Task<IActionResult> SimulateDeadLetterQueue()
+    {
+        var key = Guid.NewGuid().ToString();
+        var fakePayload = new
+        {
+            originalTopic = "transaction-events",
+            key,
+            message = new { transactionId = Guid.NewGuid(), amount = 9999.99, currency = "USD" },
+            errorReason = "Simulated consumer processing failure: downstream service timeout",
+            failedAt = DateTimeOffset.UtcNow,
+            retryCount = 3
+        };
+
+        await _kafkaProducer.ProduceAsync(KafkaTopics.DeadLetterQueue, key, fakePayload);
+        _logger.LogWarning("[TEST] Simulated DLQ message published");
+        return Ok(new { message = "Dead letter message published", topic = KafkaTopics.DeadLetterQueue, payload = fakePayload });
+    }
+
+    /// <summary>
+    /// [TEST ONLY] Simulate a saga failure with compensation — populates transfer-saga-events with
+    /// SagaStarted, AccountDebited, SagaFailed (with compensation) events.
+    /// </summary>
+    [HttpPost("test/simulate-saga-failure")]
+    public async Task<IActionResult> SimulateSagaFailure([FromQuery] Guid fromAccountId)
+    {
+        var fakeToAccountId = Guid.NewGuid(); // Non-existent → credit step will fail → compensation triggered
+        var idempotencyKey  = $"test-saga-fail-{Guid.NewGuid()}";
+
+        var (success, transactionId, errorMessage) = await _sagaOrchestrator.ExecuteTransferSagaAsync(
+            fromAccountId, fakeToAccountId, amount: 0.01m, currency: "USD", idempotencyKey: idempotencyKey);
+
+        return Ok(new
+        {
+            message      = "Saga failure simulation complete — check transfer-saga-events topic",
+            success,
+            transactionId,
+            errorMessage,
+            expectedEvents = new[] { "SagaStarted", "AccountDebited", "SagaFailed" },
+            kafkaUiUrl   = $"http://localhost:8081/ui/clusters/local/topics/{KafkaTopics.TransferSagaEvents}/messages"
+        });
     }
 }
 

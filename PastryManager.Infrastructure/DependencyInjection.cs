@@ -85,7 +85,14 @@ public static class DependencyInjection
             {
                 // Aspire provides the bootstrap servers directly
                 options.BootstrapServers = aspireKafkaConnection;
+                // Force plaintext for Aspire-managed local Kafka
+                options.SecurityProtocol = "Plaintext";
+                options.SaslMechanism    = null;
+                options.SaslUsername     = null;
+                options.SaslPassword     = null;
             }
+
+            Console.WriteLine($"[Kafka] BootstrapServers={options.BootstrapServers} SecurityProtocol={options.SecurityProtocol}");
         });
         
         services.AddSingleton<IKafkaProducer, KafkaProducer>();

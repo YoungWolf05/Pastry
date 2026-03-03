@@ -215,6 +215,44 @@ try {
     Write-Host "   ✗ Failed to get transaction history: $($_.Exception.Message)" -ForegroundColor Red
 }
 
+# Step 9: Simulate Dead Letter Queue
+Write-Host ""
+Write-Host "9️⃣  Simulating Dead Letter Queue" -ForegroundColor Green
+
+try {
+    $dlqResponse = Invoke-RestMethod -Uri "$ApiUrl/api/transactions/test/simulate-dlq" -Method Post -SkipCertificateCheck
+    Write-Host "   ✓ DLQ message published!" -ForegroundColor Green
+    Write-Host "     Topic:  $($dlqResponse.topic)" -ForegroundColor Gray
+    Write-Host "     Key:    $($dlqResponse.payload.key)" -ForegroundColor Gray
+    Write-Host "     Reason: $($dlqResponse.payload.errorReason)" -ForegroundColor Gray
+    Write-Host "     → Check Kafka UI: http://localhost:8081 → dead-letter-queue" -ForegroundColor Yellow
+} catch {
+    Write-Host "   ✗ DLQ simulation failed: $($_.Exception.Message)" -ForegroundColor Red
+    if ($_.ErrorDetails.Message) { Write-Host "     $($_.ErrorDetails.Message)" -ForegroundColor Yellow }
+}
+
+# Step 10: Simulate Saga Failure (with compensation)
+Write-Host ""
+Write-Host "🔟  Simulating Saga Failure + Compensation" -ForegroundColor Green
+
+if ($account1Id) {
+    try {
+        $sagaFailUrl = "$ApiUrl/api/transactions/test/simulate-saga-failure?fromAccountId=$account1Id"
+        Write-Host "   Triggering saga with non-existent destination account..." -ForegroundColor Gray
+        $sagaFail = Invoke-RestMethod -Uri $sagaFailUrl -Method Post -SkipCertificateCheck
+        Write-Host "   ✓ Saga failure simulated!" -ForegroundColor Green
+        Write-Host "     Success:  $($sagaFail.success)" -ForegroundColor Gray
+        Write-Host "     Error:    $($sagaFail.errorMessage)" -ForegroundColor Gray
+        Write-Host "     Expected events: $($sagaFail.expectedEvents -join ' → ')" -ForegroundColor Gray
+        Write-Host "     → Check Kafka UI: http://localhost:8081 → transfer-saga-events" -ForegroundColor Yellow
+    } catch {
+        Write-Host "   ✗ Saga failure simulation failed: $($_.Exception.Message)" -ForegroundColor Red
+        if ($_.ErrorDetails.Message) { Write-Host "     $($_.ErrorDetails.Message)" -ForegroundColor Yellow }
+    }
+} else {
+    Write-Host "   ⚠ Skipped — no account ID available from earlier steps" -ForegroundColor Yellow
+}
+
 # Summary
 Write-Host ""
 Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
@@ -229,11 +267,16 @@ Write-Host "  • Distributed transaction with compensating actions" -Foreground
 Write-Host "  • Idempotency validation" -ForegroundColor Gray
 Write-Host "  • Insufficient funds detection" -ForegroundColor Gray
 Write-Host "  • Transaction history retrieval" -ForegroundColor Gray
+Write-Host "  • Dead letter queue simulation" -ForegroundColor Gray
+Write-Host "  • Saga failure + compensation simulation" -ForegroundColor Gray
 Write-Host ""
 Write-Host "🔍 Manual Verification:" -ForegroundColor Yellow
 Write-Host "  1. Kafka UI (http://localhost:8081):" -ForegroundColor Gray
-Write-Host "     → Check topics: account-events, transaction-events, audit-logs" -ForegroundColor Gray
-Write-Host "     → View published event messages" -ForegroundColor Gray
+Write-Host "     → account-events      : account open/update events" -ForegroundColor Gray
+Write-Host "     → transaction-events  : transfer completed events" -ForegroundColor Gray
+Write-Host "     → audit-logs          : tamper-proof audit trail" -ForegroundColor Gray
+Write-Host "     → transfer-saga-events: SagaStarted/Debited/Credited/Completed/Failed" -ForegroundColor Gray
+Write-Host "     → dead-letter-queue   : simulated poison-pill message" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  2. PgAdmin (http://localhost:8080):" -ForegroundColor Gray
 Write-Host "     → Accounts table: AccountNumber should be encrypted (binary)" -ForegroundColor Gray

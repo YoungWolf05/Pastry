@@ -78,7 +78,7 @@ public class TransferSagaOrchestrator : ISagaOrchestrator
         CancellationToken cancellationToken = default)
     {
         var transactionId = Guid.NewGuid();
-        var correlationId = Guid.NewGuid();
+        var correlationId = Guid.NewGuid().ToString();
 
         try
         {
@@ -93,34 +93,45 @@ public class TransferSagaOrchestrator : ISagaOrchestrator
                     existingTransaction.Status == TransactionStatus.Completed ? null : "Transaction already exists but failed");
             }
 
-            // Step 1: Initiate transaction
+            // Step 1: Initiate — publish saga started event
             var transaction = await InitiateTransactionAsync(transactionId, fromAccountId, toAccountId, 
                 amount, currency, idempotencyKey, cancellationToken);
+            await PublishSagaEventAsync("SagaStarted", transactionId, correlationId,
+                new { step = "Initiate", fromAccountId, toAccountId, amount, currency }, cancellationToken);
 
-            // Step 2: Debit from source account with optimistic locking
+            // Step 2: Debit — publish saga step event
             var debitSuccess = await _resiliencePipeline.ExecuteAsync(async ct =>
                 await DebitAccountAsync(fromAccountId, amount, transaction, ct), cancellationToken);
 
             if (!debitSuccess)
             {
                 await CompensateTransactionAsync(transaction, "Debit failed", cancellationToken);
+                await PublishSagaEventAsync("SagaFailed", transactionId, correlationId,
+                    new { step = "Debit", reason = "Insufficient funds or account unavailable", compensated = true }, cancellationToken);
                 return (false, transactionId, "Insufficient funds or account unavailable");
             }
+            await PublishSagaEventAsync("AccountDebited", transactionId, correlationId,
+                new { step = "Debit", fromAccountId, amount }, cancellationToken);
 
-            // Step 3: Credit to destination account with optimistic locking
+            // Step 3: Credit — publish saga step event
             var creditSuccess = await _resiliencePipeline.ExecuteAsync(async ct =>
                 await CreditAccountAsync(toAccountId, amount, transaction, ct), cancellationToken);
 
             if (!creditSuccess)
             {
-                // Compensating transaction: refund source account
                 await CompensateDebitAsync(fromAccountId, amount, transaction, cancellationToken);
                 await CompensateTransactionAsync(transaction, "Credit failed", cancellationToken);
+                await PublishSagaEventAsync("SagaFailed", transactionId, correlationId,
+                    new { step = "Credit", reason = "Failed to credit destination account", compensated = true }, cancellationToken);
                 return (false, transactionId, "Failed to credit destination account");
             }
+            await PublishSagaEventAsync("AccountCredited", transactionId, correlationId,
+                new { step = "Credit", toAccountId, amount }, cancellationToken);
 
-            // Step 4: Complete transaction
+            // Step 4: Complete — publish saga completed event
             await CompleteTransactionAsync(transaction, cancellationToken);
+            await PublishSagaEventAsync("SagaCompleted", transactionId, correlationId,
+                new { step = "Complete", fromAccountId, toAccountId, amount, currency, status = "Completed" }, cancellationToken);
 
             _logger.LogInformation(
                 "Transfer saga completed successfully. Transaction: {TransactionId}, Amount: {Amount}",
@@ -131,7 +142,37 @@ public class TransferSagaOrchestrator : ISagaOrchestrator
         catch (Exception ex)
         {
             _logger.LogError(ex, "Transfer saga failed for transaction: {TransactionId}", transactionId);
+            await PublishSagaEventAsync("SagaFailed", transactionId, correlationId,
+                new { reason = ex.Message, compensated = false }, cancellationToken);
             return (false, transactionId, $"Transfer failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Publishes a saga state-change event to the transfer-saga-events topic
+    /// </summary>
+    private async Task PublishSagaEventAsync(string eventType, Guid transactionId, string correlationId,
+        object payload, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sagaEvent = new
+            {
+                eventType,
+                transactionId,
+                correlationId,
+                occurredAt = DateTime.UtcNow,
+                payload
+            };
+            await _kafkaProducer.ProduceAsync(
+                KafkaTopics.TransferSagaEvents,
+                transactionId.ToString(),
+                sagaEvent,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish saga event {EventType} for {TransactionId}", eventType, transactionId);
         }
     }
 
