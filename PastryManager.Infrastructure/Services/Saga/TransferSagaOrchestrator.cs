@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
+using PastryManager.Application.Common.Interfaces;
 using PastryManager.Domain.Entities;
 using PastryManager.Domain.Enums;
 using PastryManager.Domain.Events;
@@ -12,17 +13,6 @@ using Polly.CircuitBreaker;
 using Polly.Retry;
 
 namespace PastryManager.Infrastructure.Services.Saga;
-
-public interface ISagaOrchestrator
-{
-    Task<(bool Success, Guid? TransactionId, string? ErrorMessage)> ExecuteTransferSagaAsync(
-        Guid fromAccountId, 
-        Guid toAccountId, 
-        decimal amount, 
-        string currency, 
-        string idempotencyKey, 
-        CancellationToken cancellationToken = default);
-}
 
 /// <summary>
 /// Saga orchestrator for distributed transactions using Kafka

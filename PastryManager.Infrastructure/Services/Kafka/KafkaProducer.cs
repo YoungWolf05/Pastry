@@ -2,6 +2,7 @@ using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using PastryManager.Application.Common.Interfaces;
 using System.Text.Json;
 
 namespace PastryManager.Infrastructure.Services.Kafka;
@@ -29,7 +30,7 @@ public interface IKafkaProducer
     Task ProduceWithHeadersAsync<T>(string topic, string key, T message, Headers headers, CancellationToken cancellationToken = default);
 }
 
-public class KafkaProducer : IKafkaProducer, IAsyncDisposable
+public class KafkaProducer : IKafkaProducer, IEventPublisher, IAsyncDisposable
 {
     private IProducer<string, string>? _producer;
     private readonly ILogger<KafkaProducer> _logger;
@@ -144,6 +145,10 @@ public class KafkaProducer : IKafkaProducer, IAsyncDisposable
     {
         await ProduceWithHeadersAsync(topic, key, message, new Headers(), cancellationToken);
     }
+
+    // IEventPublisher — allows Application layer handlers to publish without referencing Confluent.Kafka
+    Task IEventPublisher.PublishAsync(string topic, string key, object payload, CancellationToken cancellationToken)
+        => ProduceAsync(topic, key, payload, cancellationToken);
 
     public async Task ProduceWithHeadersAsync<T>(string topic, string key, T message, Headers headers, CancellationToken cancellationToken = default)
     {

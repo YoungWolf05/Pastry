@@ -95,7 +95,9 @@ public static class DependencyInjection
             Console.WriteLine($"[Kafka] BootstrapServers={options.BootstrapServers} SecurityProtocol={options.SecurityProtocol}");
         });
         
-        services.AddSingleton<IKafkaProducer, KafkaProducer>();
+        services.AddSingleton<KafkaProducer>();
+        services.AddSingleton<IKafkaProducer>(sp => sp.GetRequiredService<KafkaProducer>());
+        services.AddSingleton<IEventPublisher>(sp => sp.GetRequiredService<KafkaProducer>());
         services.AddSingleton<IKafkaConsumer, KafkaConsumer>();
     }
 
