@@ -24,6 +24,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     // Event sourcing and audit
     public DbSet<EventStore> EventStores => Set<EventStore>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     
     // Authentication
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();

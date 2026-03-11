@@ -16,6 +16,7 @@ using PastryManager.Infrastructure.Services.Authentication;
 using PastryManager.Infrastructure.Services.Audit;
 using PastryManager.Infrastructure.Services.EventSourcing;
 using PastryManager.Infrastructure.Services.Secrets;
+using PastryManager.Infrastructure.Services.Outbox;
 using PastryManager.Infrastructure.Services.Saga;
 
 namespace PastryManager.Infrastructure;
@@ -69,6 +70,9 @@ public static class DependencyInjection
         
         // Configure Saga orchestrator
         services.AddScoped<ISagaOrchestrator, TransferSagaOrchestrator>();
+
+        // Transactional Outbox — background worker that publishes pending outbox messages to Kafka
+        services.AddHostedService<OutboxWorker>();
 
         return services;
     }

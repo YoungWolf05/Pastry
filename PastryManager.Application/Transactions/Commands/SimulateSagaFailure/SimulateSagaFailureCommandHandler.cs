@@ -14,13 +14,15 @@ public class SimulateSagaFailureCommandHandler : IRequestHandler<SimulateSagaFai
 
     public async Task<Result<SimulateSagaFailureResult>> Handle(SimulateSagaFailureCommand request, CancellationToken cancellationToken)
     {
-        // Use a non-existent toAccountId so the credit step fails, triggering compensation
-        var fakeToAccountId = Guid.NewGuid();
-        var idempotencyKey  = $"test-saga-fail-{Guid.NewGuid()}";
+        // Trigger debit failure by using an amount that exceeds any realistic balance.
+        // Both account IDs must be real accounts (FK constraint), so we use fromAccountId
+        // for both ends — the debit will fail with "insufficient funds", compensation runs,
+        // and the SagaFailed event is emitted. Same observable outcome without FK violations.
+        var idempotencyKey = $"test-saga-fail-{Guid.NewGuid()}";
 
         var (success, transactionId, errorMessage) = await _saga.ExecuteTransferSagaAsync(
-            request.FromAccountId, fakeToAccountId,
-            amount: 0.01m, currency: "USD",
+            request.FromAccountId, request.FromAccountId,
+            amount: 999_999_999m, currency: "USD",
             idempotencyKey: idempotencyKey,
             cancellationToken: cancellationToken);
 

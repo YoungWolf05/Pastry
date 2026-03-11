@@ -11,6 +11,7 @@ public interface IApplicationDbContext
     DbSet<FileAttachment> FileAttachments { get; }
     DbSet<Account> Accounts { get; }
     DbSet<Transaction> Transactions { get; }
+    DbSet<OutboxMessage> OutboxMessages { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

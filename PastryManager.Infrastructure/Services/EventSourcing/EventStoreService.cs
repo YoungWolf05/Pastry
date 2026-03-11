@@ -15,6 +15,8 @@ public interface IEventStoreService
 {
     Task AppendEventAsync<T>(T domainEvent, CancellationToken cancellationToken = default) where T : IDomainEvent;
     Task<IEnumerable<EventStore>> GetEventsForAggregateAsync(Guid aggregateId, string aggregateType, CancellationToken cancellationToken = default);
+
+    // Kept for saga/test use-cases that explicitly need to push to Kafka directly
     Task PublishEventToKafkaAsync<T>(T domainEvent, string topic, CancellationToken cancellationToken = default) where T : IDomainEvent;
 }
 
@@ -41,32 +43,50 @@ public class EventStoreService : IEventStoreService
     {
         var eventData = JsonSerializer.Serialize(domainEvent);
         var hash = ComputeHash(eventData);
-        
+        var aggregateId = GetAggregateId(domainEvent);
+        var aggregateType = GetAggregateType(domainEvent);
+        var topic = ResolveKafkaTopic(domainEvent);
+
+        // Auto-increment version from DB — the event store owns versioning, not the domain event.
+        // This prevents IX_EventStore_AggregateId_Version violations when a saga appends
+        // multiple events for the same aggregate (e.g. Initiated → Completed/Failed).
+        var maxVersion = await _context.EventStores
+            .Where(e => e.AggregateId == aggregateId && e.AggregateType == aggregateType)
+            .MaxAsync(e => (int?)e.Version, cancellationToken) ?? 0;
+
+        var nextVersion = maxVersion + 1;
+
         var eventStoreEntry = new EventStore
         {
-            Id = Guid.NewGuid(),
-            AggregateId = GetAggregateId(domainEvent),
-            AggregateType = GetAggregateType(domainEvent),
-            EventType = domainEvent.EventType,
-            EventData = eventData,
-            Version = domainEvent.Version,
-            Timestamp = domainEvent.OccurredAt,
-            UserId = GetUserId(domainEvent),
+            Id            = Guid.NewGuid(),
+            AggregateId   = aggregateId,
+            AggregateType = aggregateType,
+            EventType     = domainEvent.EventType,
+            EventData     = eventData,
+            Version       = nextVersion,
+            Timestamp     = domainEvent.OccurredAt,
+            UserId        = GetUserId(domainEvent),
             CorrelationId = Guid.NewGuid().ToString(),
-            Hash = hash
+            Hash          = hash
+        };
+
+        // Transactional Outbox: write event store entry AND outbox message
+        // in the same SaveChanges call — atomically committed or both rolled back.
+        var outboxMessage = new OutboxMessage
+        {
+            EventType  = domainEvent.EventType,
+            Topic      = topic,
+            MessageKey = aggregateId.ToString(),
+            Payload    = eventData
         };
 
         _context.EventStores.Add(eventStoreEntry);
+        _context.OutboxMessages.Add(outboxMessage);
         await _context.SaveChangesAsync(cancellationToken);
-        
-        _logger.LogInformation(
-            "Event {EventType} appended to event store for aggregate {AggregateId}",
-            domainEvent.EventType,
-            eventStoreEntry.AggregateId);
 
-        // Auto-publish to the correct Kafka topic based on event type
-        var topic = ResolveKafkaTopic(domainEvent);
-        await PublishEventToKafkaAsync(domainEvent, topic, cancellationToken);
+        _logger.LogInformation(
+            "Event {EventType} appended to event store and outbox for aggregate {AggregateId}",
+            domainEvent.EventType, aggregateId);
     }
 
     public async Task<IEnumerable<EventStore>> GetEventsForAggregateAsync(
@@ -80,34 +100,31 @@ public class EventStoreService : IEventStoreService
             .ToListAsync(cancellationToken);
     }
 
-    public async Task PublishEventToKafkaAsync<T>(T domainEvent, string topic, CancellationToken cancellationToken = default) 
+    public async Task PublishEventToKafkaAsync<T>(T domainEvent, string topic, CancellationToken cancellationToken = default)
         where T : IDomainEvent
     {
         try
         {
             var key = GetAggregateId(domainEvent).ToString();
             await _kafkaProducer.ProduceAsync(topic, key, domainEvent, cancellationToken);
-            
+
             _logger.LogInformation(
-                "Event {EventType} published to Kafka topic {Topic}",
-                domainEvent.EventType,
-                topic);
+                "Event {EventType} published directly to Kafka topic {Topic}",
+                domainEvent.EventType, topic);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to publish event {EventType} to Kafka", domainEvent.EventType);
-            // Don't rethrow - Kafka being down should not fail the business operation
+            // Don't rethrow — Kafka being down should not fail the business operation
         }
     }
 
-    /// <summary>
-    /// Routes events to the correct Kafka topic based on their type
-    /// </summary>
+    /// <summary>Routes domain events to the correct Kafka topic</summary>
     private static string ResolveKafkaTopic(IDomainEvent domainEvent) => domainEvent switch
     {
-        AccountEvent   => KafkaTopics.AccountEvents,
+        AccountEvent     => KafkaTopics.AccountEvents,
         TransactionEvent => KafkaTopics.TransactionEvents,
-        _              => KafkaTopics.AuditLogs
+        _                => KafkaTopics.AuditLogs
     };
 
     private static string ComputeHash(string data)
@@ -117,33 +134,24 @@ public class EventStoreService : IEventStoreService
         return Convert.ToBase64String(hashBytes);
     }
 
-    private static Guid GetAggregateId(IDomainEvent domainEvent)
+    private static Guid GetAggregateId(IDomainEvent domainEvent) => domainEvent switch
     {
-        return domainEvent switch
-        {
-            AccountEvent accountEvent => accountEvent.AccountId,
-            TransactionEvent transactionEvent => transactionEvent.TransactionId,
-            _ => throw new ArgumentException($"Unknown event type: {domainEvent.GetType().Name}")
-        };
-    }
+        AccountEvent accountEvent         => accountEvent.AccountId,
+        TransactionEvent transactionEvent => transactionEvent.TransactionId,
+        _ => throw new ArgumentException($"Unknown event type: {domainEvent.GetType().Name}")
+    };
 
-    private static string GetAggregateType(IDomainEvent domainEvent)
+    private static string GetAggregateType(IDomainEvent domainEvent) => domainEvent switch
     {
-        return domainEvent switch
-        {
-            AccountEvent => "Account",
-            TransactionEvent => "Transaction",
-            _ => throw new ArgumentException($"Unknown event type: {domainEvent.GetType().Name}")
-        };
-    }
+        AccountEvent     => "Account",
+        TransactionEvent => "Transaction",
+        _ => throw new ArgumentException($"Unknown event type: {domainEvent.GetType().Name}")
+    };
 
-    private static string GetUserId(IDomainEvent domainEvent)
+    private static string GetUserId(IDomainEvent domainEvent) => domainEvent switch
     {
-        return domainEvent switch
-        {
-            AccountEvent accountEvent => accountEvent.UserId.ToString(),
-            TransactionEvent => "System", // Transactions may be system-initiated
-            _ => "Unknown"
-        };
-    }
+        AccountEvent accountEvent => accountEvent.UserId.ToString(),
+        TransactionEvent          => "System",
+        _                         => "Unknown"
+    };
 }
